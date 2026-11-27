@@ -1,6 +1,6 @@
 # MATLAB Figure Pack
 
-Turn saved MATLAB figures into a shareable bundle with an offline gallery, PNG and vector PDF exports, and reusable XY data. Use the same bundle to compare runs, preflight paper artwork, rebuild editable plots, or connect to Plotly and Python.
+Turn saved MATLAB figures and selected project files into a handoff ZIP with a browser index, PNG and vector PDF exports, reusable XY data, and a resolution check. Use the Figure Pack on its own to compare runs, rebuild editable plots, or connect to Plotly and Python.
 
 [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=lenguoyu/matlab-lab-figure-export&file=demo_lab_figure_pack.m) · [Download source](https://github.com/lenguoyu/matlab-lab-figure-export/archive/refs/heads/main.zip) · [Offline comparison example](https://github.com/lenguoyu/matlab-lab-figure-export/raw/refs/heads/main/comparison-example.zip) · [中文工作流](docs/WORKFLOWS.md)
 
@@ -16,6 +16,7 @@ Set the repository as your current MATLAB folder, or add its root to the path. G
 
 | Task | MATLAB entry point |
 | --- | --- |
+| Package figures, checks, code, and reports for handoff | `build_lab_delivery('experiment-figs', 'delivery.zip', 88.9, 600)` · [Delivery guide](docs/DELIVERY.md) |
 | Export a folder of saved figures | `export_lab_batch('experiment-figs', 'figure-pack')` |
 | Review two runs | `compare_lab_packs('baseline-pack', 'candidate-pack', 'comparison')` |
 | Check a 600 DPI target at 88.9 mm | `check_lab_artwork(pack, 88.9, 600)` |
