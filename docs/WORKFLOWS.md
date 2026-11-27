@@ -33,7 +33,7 @@ figure-pack/
     └── experiment.csv
 ```
 
-默认扫描子目录，接收每个文件含一张图的 `.fig`，并写到一个新目录。`'CombinePDF', false` 只生成逐图导出和图集。需打包交付时，从项目目录执行 `zip('submission.zip', {'main.m', 'report.pdf', 'figure-pack'})`，把列表换成你实际提交的文件。课程可能要求 ZIP，也可能分别提交 PDF 与源代码。 [MIT 作业说明](https://ocw.mit.edu/courses/10-34-numerical-methods-applied-to-chemical-engineering-fall-2015/e5f1841a841b5910a3d250dcca7b9221_MIT10_34F15_HW_Guide_2015.pdf) · [CMU 课程实例](https://course.ece.cmu.edu/~ece491/homework/h5.pdf) · [MATLAB zip](https://www.mathworks.com/help/matlab/ref/zip.html)
+默认扫描子目录，接收每个文件含一张图的 `.fig`，并写到一个新目录。`'CombinePDF', false` 只生成逐图导出和图集。交付时用 `build_lab_delivery` 把图包、预检和明确选定的报告与代码写成一个 ZIP。 [一键交付指南](DELIVERY.md)
 
 ![由附带示例生成的两张 MATLAB 图及其导出格式](../figure-pack-preview.png)
 

@@ -88,7 +88,7 @@ function writeFigure(file, report, row)
     if strlength(report.PNG(row)) > 0
         fprintf(file, ['<div class="preview"><img src="%s" alt="%s" ' ...
             'loading="lazy" decoding="async"></div>\n'], ...
-            relativeUrl(report.PNG(row)), lab_html_escape("Preview of " + source));
+            lab_relative_url(report.PNG(row)), lab_html_escape("Preview of " + source));
     end
     fprintf(file, '<div class="card-content"><h3>%s</h3>\n', lab_html_escape(source));
     fprintf(file, '<p class="metadata">%d series', report.SeriesCount(row));
@@ -107,20 +107,6 @@ function link = artifactLink(path, label, context)
     link = '';
     if strlength(string(path)) > 0
         link = sprintf('<a href="%s" aria-label="%s">%s</a>', ...
-            relativeUrl(path), lab_html_escape(context), lab_html_escape(label));
+            lab_relative_url(path), lab_html_escape(context), lab_html_escape(label));
     end
-end
-
-function url = relativeUrl(path)
-    bytes = char(unicode2native(char(path), 'UTF-8'));
-    encoded = cell(size(bytes));
-    unreserved = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~/';
-    for index = 1:numel(bytes)
-        if any(bytes(index) == unreserved)
-            encoded{index} = bytes(index);
-        else
-            encoded{index} = sprintf('%%%02X', uint8(bytes(index)));
-        end
-    end
-    url = lab_html_escape(['./', encoded{:}]);
 end

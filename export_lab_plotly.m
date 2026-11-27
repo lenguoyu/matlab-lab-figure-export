@@ -21,17 +21,10 @@ function report = export_lab_plotly(packFolder, outputFolder, varargin)
     addParameter(options, 'YScale', "linear");
     parse(options, varargin{:});
 
-    bundle = textOption(options.Results.PlotlyJS, 'PlotlyJS');
-    license = textOption(options.Results.PlotlyLicense, 'PlotlyLicense');
+    [bundle, license] = lab_plotly_assets(options.Results.PlotlyJS, options.Results.PlotlyLicense, mfilename);
     xScale = axisScale(options.Results.XScale, 'XScale');
     yScale = axisScale(options.Results.YScale, 'YScale');
     hasViewer = bundle ~= "";
-    if xor(hasViewer, license ~= "")
-        error('export_lab_plotly:BundlePair', 'Provide both PlotlyJS and its matching PlotlyLicense.');
-    end
-    if hasViewer && (~isfile(bundle) || ~endsWith(bundle, '.js', 'IgnoreCase', true) || ~isfile(license))
-        error('export_lab_plotly:BundleFile', 'The local JavaScript bundle and license must both exist.');
-    end
 
     [outputFolder, parent] = lab_pack_destination(outputFolder, mfilename);
     pack = read_lab_pack(packFolder, "Input", mfilename);

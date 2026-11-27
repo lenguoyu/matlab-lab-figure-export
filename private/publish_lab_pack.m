@@ -1,28 +1,35 @@
-function publish_lab_pack(stageFolder, outputFolder, caller)
-%PUBLISH_LAB_PACK Publish a staged directory to a fresh destination.
-    assertFresh(outputFolder, caller);
+function publish_lab_pack(staged, destination, caller)
+%PUBLISH_LAB_PACK Move a staged directory or file to a fresh destination.
+    assertFresh(destination, caller);
+    lockFolder = destination + ".export_lab_batch.lock";
     if usejava('jvm')
-        stageFile = java.io.File(char(stageFolder));
-        outputFile = java.io.File(char(outputFolder));
+        lock = java.io.File(char(lockFolder));
+        created = lock.mkdir();
+        message = 'The destination could not be reserved.';
+    else
+        [created, message, messageId] = mkdir(lockFolder);
+        created = created && isempty(messageId);
+    end
+    if ~created
+        error([caller ':OutputExists'], 'Cannot reserve destination %s. %s', destination, message);
+    end
+    lockCleanup = onCleanup(@() rmdir(lockFolder));
+    assertFresh(destination, caller);
+
+    if usejava('jvm')
+        stageFile = java.io.File(char(staged));
+        outputFile = java.io.File(char(destination));
         try
             javaMethod('move', 'java.nio.file.Files', stageFile.toPath(), ...
                 outputFile.toPath(), javaArray('java.nio.file.CopyOption', 0));
         catch issue
-            assertFresh(outputFolder, caller);
+            assertFresh(destination, caller);
             rethrow(issue);
         end
     else
-        lockFolder = outputFolder + ".export_lab_batch.lock";
-        [created, message, messageId] = mkdir(lockFolder);
-        if ~created || ~isempty(messageId)
-            error([caller ':OutputExists'], 'Cannot reserve destination %s: %s', ...
-                outputFolder, message);
-        end
-        lockCleanup = onCleanup(@() rmdir(lockFolder));
-        assertFresh(outputFolder, caller);
-        [moved, message] = movefile(stageFolder, outputFolder);
+        [moved, message] = movefile(staged, destination);
         if ~moved
-            error([caller ':Publish'], 'Cannot publish the output folder: %s', message);
+            error([caller ':Publish'], 'Cannot publish the output: %s', message);
         end
     end
 end
