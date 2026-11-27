@@ -32,7 +32,7 @@ function write_lab_figure_gallery(destination, report, bookFilename)
         fprintf(file, '<ul class="failures">\n');
         for row = find(failed).'
             fprintf(file, '<li><strong>%s</strong><p>%s</p></li>\n', ...
-                escapeHtml(report.Source(row)), escapeHtml(report.Message(row)));
+                lab_html_escape(report.Source(row)), lab_html_escape(report.Message(row)));
         end
         fprintf(file, '</ul></section>\n');
     end
@@ -88,9 +88,9 @@ function writeFigure(file, report, row)
     if strlength(report.PNG(row)) > 0
         fprintf(file, ['<div class="preview"><img src="%s" alt="%s" ' ...
             'loading="lazy" decoding="async"></div>\n'], ...
-            relativeUrl(report.PNG(row)), escapeHtml("Preview of " + source));
+            relativeUrl(report.PNG(row)), lab_html_escape("Preview of " + source));
     end
-    fprintf(file, '<div class="card-content"><h3>%s</h3>\n', escapeHtml(source));
+    fprintf(file, '<div class="card-content"><h3>%s</h3>\n', lab_html_escape(source));
     fprintf(file, '<p class="metadata">%d series', report.SeriesCount(row));
     if report.BookPage(row) > 0
         fprintf(file, ' &middot; book page %d', report.BookPage(row));
@@ -107,7 +107,7 @@ function link = artifactLink(path, label, context)
     link = '';
     if strlength(string(path)) > 0
         link = sprintf('<a href="%s" aria-label="%s">%s</a>', ...
-            relativeUrl(path), escapeHtml(context), escapeHtml(label));
+            relativeUrl(path), lab_html_escape(context), lab_html_escape(label));
     end
 end
 
@@ -122,14 +122,5 @@ function url = relativeUrl(path)
             encoded{index} = sprintf('%%%02X', uint8(bytes(index)));
         end
     end
-    url = escapeHtml(['./', encoded{:}]);
-end
-
-function escaped = escapeHtml(value)
-    escaped = char(value);
-    escaped = strrep(escaped, '&', '&amp;');
-    escaped = strrep(escaped, '<', '&lt;');
-    escaped = strrep(escaped, '>', '&gt;');
-    escaped = strrep(escaped, '"', '&quot;');
-    escaped = strrep(escaped, '''', '&#39;');
+    url = lab_html_escape(['./', encoded{:}]);
 end

@@ -83,7 +83,7 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
 
     writetable(report, fullfile(stageFolder, 'manifest.csv'), 'Encoding', 'UTF-8');
     write_lab_figure_gallery(fullfile(stageFolder, 'index.html'), report, bookName);
-    publishStage(stageFolder, outputFolder);
+    publish_lab_pack(stageFolder, outputFolder, mfilename);
 end
 
 function value = pathText(value, argumentName)
@@ -200,36 +200,6 @@ end
 function assertFreshOutput(outputFolder)
     if isfile(outputFolder) || isfolder(outputFolder)
         error('export_lab_batch:OutputExists', 'Choose a new destination: %s', outputFolder);
-    end
-end
-
-function publishStage(stageFolder, outputFolder)
-    assertFreshOutput(outputFolder);
-    if usejava('jvm')
-        % Move the complete directory with no replace option or directory merging.
-        stageFile = java.io.File(char(stageFolder));
-        outputFile = java.io.File(char(outputFolder));
-        try
-            javaMethod('move', 'java.nio.file.Files', stageFile.toPath(), ...
-                outputFile.toPath(), javaArray('java.nio.file.CopyOption', 0));
-        catch issue
-            assertFreshOutput(outputFolder);
-            rethrow(issue)
-        end
-    else
-        % Protect the move when multiple no-JVM MATLAB sessions publish the same path.
-        lockFolder = outputFolder + ".export_lab_batch.lock";
-        [created, message, messageId] = mkdir(lockFolder);
-        if ~created || ~isempty(messageId)
-            error('export_lab_batch:OutputExists', 'Cannot reserve destination %s: %s', ...
-                outputFolder, message);
-        end
-        lockCleanup = onCleanup(@() rmdir(lockFolder));
-        assertFreshOutput(outputFolder);
-        [moved, message] = movefile(stageFolder, outputFolder);
-        if ~moved
-            error('export_lab_batch:Publish', 'Cannot publish the output folder: %s', message);
-        end
     end
 end
 
