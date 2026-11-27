@@ -22,7 +22,7 @@ function [figures, series] = compare_lab_packs(baselineFolder, candidateFolder, 
     absTol = tolerance(options.Results.AbsTol, 'AbsTol');
     relTol = tolerance(options.Results.RelTol, 'RelTol');
 
-    [outputFolder, outputParent] = freshDestination(outputFolder);
+    [outputFolder, outputParent] = lab_pack_destination(outputFolder, mfilename);
     baseline = read_lab_pack(baselineFolder, "Baseline", mfilename);
     candidate = read_lab_pack(candidateFolder, "Candidate", mfilename);
     source = union(baseline.Manifest.Source, candidate.Manifest.Source);
@@ -30,12 +30,7 @@ function [figures, series] = compare_lab_packs(baselineFolder, candidateFolder, 
     [~, candidateRows] = ismember(source, candidate.Manifest.Source);
     count = numel(source);
 
-    stage = string(tempname(outputParent));
-    [created, message, messageId] = mkdir(stage);
-    if ~created || ~isempty(messageId)
-        error('compare_lab_packs:StageCreate', 'Cannot create a staging folder: %s', message);
-    end
-    stageCleanup = onCleanup(@() removeStage(stage));
+    [stage, stageCleanup] = lab_pack_stage(outputParent, mfilename);
     [created, message] = mkdir(fullfile(stage, 'previews'));
     if ~created
         error('compare_lab_packs:PreviewFolder', 'Cannot create the preview folder: %s', message);
@@ -64,37 +59,6 @@ function result = tolerance(value, name)
     validateattributes(value, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'}, ...
         'compare_lab_packs', name);
     result = double(value);
-end
-
-function [folder, parent] = freshDestination(folder)
-    folder = pathText(folder, "Output folder");
-    assertFresh(folder);
-    if ispc
-        folder = replace(folder, "\", "/");
-    end
-    folder = regexprep(folder, '/+$', '');
-    [parent, name, extension] = fileparts(folder);
-    if parent == ""
-        parent = string(pwd);
-    end
-    parent = lab_pack_folder(parent, "Output parent", mfilename);
-    folder = fullfile(parent, name + extension);
-    assertFresh(folder);
-end
-
-function assertFresh(folder)
-    if isfolder(folder) || isfile(folder)
-        error('compare_lab_packs:OutputExists', 'Choose a new destination: %s', folder);
-    end
-end
-
-function value = pathText(value, label)
-    if ischar(value) && isrow(value)
-        value = string(value);
-    end
-    if ~isstring(value) || ~isscalar(value) || ismissing(value) || strlength(value) == 0
-        error('compare_lab_packs:InvalidPath', '%s must be a nonempty path.', label);
-    end
 end
 
 function [figure, rows] = compareFigure(figure, baseline, baseRow, candidate, candRow, ...
@@ -172,7 +136,7 @@ function [preview, csvPath, notes] = inspectRow(pack, index, stage, fileIndex)
     [pngPath, issue] = lab_pack_artifact(pack, row.PNG, ".png");
     if issue == ""
         previewName = string(sprintf('previews/%04d-%s.png', fileIndex, lower(pack.Label)));
-        issue = copyPreview(pngPath, fullfile(stage, previewName));
+        issue = copy_lab_preview(pngPath, fullfile(stage, previewName), 'compare_lab_packs');
         if issue == ""
             preview = previewName;
         end
@@ -189,59 +153,10 @@ function [preview, csvPath, notes] = inspectRow(pack, index, stage, fileIndex)
     end
 end
 
-function issue = copyPreview(source, destination)
-    issue = "Could not read a bounded PNG preview.";
-    [input, ~] = fopen(source, 'rb', 'ieee-be');
-    if input < 0
-        return
-    end
-    inputGuard = onCleanup(@() fclose(input));
-    if fseek(input, 0, 'eof') ~= 0
-        return
-    end
-    byteCount = ftell(input);
-    if byteCount < 45 || byteCount > 32 * 1024^2
-        issue = "PNG size is invalid or exceeds 32 MiB.";
-        return
-    end
-    frewind(input);
-    header = fread(input, 16, '*uint8').';
-    pngHeader = uint8([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, double('IHDR')]);
-    if ~isequal(header, pngHeader)
-        issue = "The file does not have a valid PNG header.";
-        return
-    end
-    dimensions = fread(input, 2, 'uint32=>double');
-    if numel(dimensions) ~= 2 || any(dimensions == 0 | dimensions > 10000) || prod(dimensions) > 40e6
-        issue = "PNG dimensions are invalid or exceed the preview limit.";
-        return
-    end
-    frewind(input);
-    bytes = fread(input, byteCount, '*uint8');
-    if numel(bytes) ~= byteCount
-        return
-    end
-    [output, message] = fopen(destination, 'wb');
-    if output < 0
-        error('compare_lab_packs:PreviewWrite', 'Cannot write a preview: %s', message);
-    end
-    outputGuard = onCleanup(@() fclose(output));
-    if fwrite(output, bytes, 'uint8') ~= byteCount
-        error('compare_lab_packs:PreviewWrite', 'Could not write the complete PNG preview.');
-    end
-    issue = "";
-end
-
 function rows = emptySeries()
     rows = table('Size', [0, 11], ...
         'VariableNames', {'Source', 'Axes', 'Series', 'Label', 'Status', 'ComparedSamples', ...
         'SkippedSamples', 'OutsideSamples', 'MaxAbsDelta', 'XAtMax', 'Message'}, ...
         'VariableTypes', {'string', 'double', 'double', 'string', 'string', 'double', ...
         'double', 'double', 'double', 'double', 'string'});
-end
-
-function removeStage(folder)
-    if isfolder(folder)
-        rmdir(folder, 's');
-    end
 end

@@ -38,32 +38,14 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
         'integer', 'positive'}, mfilename, 'DPI');
 
     sourceFolder = lab_pack_folder(sourceFolder, "sourceFolder", mfilename);
-    outputFolder = pathText(outputFolder, 'outputFolder');
-    assertFreshOutput(outputFolder);
-    if ispc
-        outputFolder = replace(outputFolder, "\", "/");
-    end
-    outputFolder = regexprep(outputFolder, '/+$', '');
-    assertFreshOutput(outputFolder);
-    [outputParent, outputName, outputExtension] = fileparts(outputFolder);
-    if strlength(outputParent) == 0
-        outputParent = string(pwd);
-    end
-    outputParent = lab_pack_folder(outputParent, "outputFolder parent", mfilename);
-    outputFolder = fullfile(outputParent, outputName + outputExtension);
-    assertFreshOutput(outputFolder);
+    [outputFolder, outputParent] = lab_pack_destination(outputFolder, mfilename);
 
     [report, stems] = figurePlan(sourceFolder);
     if options.Results.DryRun
         return
     end
 
-    stageFolder = string(tempname(outputParent));
-    [created, message, messageId] = mkdir(stageFolder);
-    if ~created || ~isempty(messageId)
-        error('export_lab_batch:StageCreate', 'Cannot create a staging folder: %s', message);
-    end
-    stageCleanup = onCleanup(@() removeStage(stageFolder));
+    [stageFolder, stageCleanup] = lab_pack_stage(outputParent, mfilename);
     originalFigure = get(groot, 'CurrentFigure');
     figureState = onCleanup(@() restoreCurrentFigure(originalFigure));
 
@@ -85,15 +67,6 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
         'Encoding', 'UTF-8', 'QuoteStrings', true);
     write_lab_figure_gallery(fullfile(stageFolder, 'index.html'), report, bookName);
     publish_lab_pack(stageFolder, outputFolder, mfilename);
-end
-
-function value = pathText(value, argumentName)
-    if ischar(value) && isrow(value)
-        value = string(value);
-    end
-    if ~isstring(value) || ~isscalar(value) || ismissing(value) || strlength(value) == 0
-        error('export_lab_batch:InvalidPath', '%s must be a nonempty path.', argumentName);
-    end
 end
 
 function [report, stems] = figurePlan(sourceFolder)
@@ -208,12 +181,6 @@ function path = pathWithin(rootFolder, relativePath)
     path = fullfile(rootFolder, replace(relativePath, '/', filesep));
 end
 
-function assertFreshOutput(outputFolder)
-    if isfile(outputFolder) || isfolder(outputFolder)
-        error('export_lab_batch:OutputExists', 'Choose a new destination: %s', outputFolder);
-    end
-end
-
 function deleteFigures(figures)
     delete(figures(isgraphics(figures, 'figure')));
 end
@@ -227,11 +194,5 @@ end
 function deleteFiles(paths)
     for path = paths(isfile(paths))
         delete(path);
-    end
-end
-
-function removeStage(folder)
-    if isfolder(folder)
-        rmdir(folder, 's');
     end
 end
