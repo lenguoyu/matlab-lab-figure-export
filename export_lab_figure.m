@@ -30,6 +30,8 @@ function [pngFile, pdfFile] = export_lab_figure(target, outputBase, dpi)
     pngFile = [outputBase, '.png'];
     pdfFile = [outputBase, '.pdf'];
     checkAvailable(pngFile, pdfFile);
+    lock = reserveOutput(outputBase);
+    checkAvailable(pngFile, pdfFile);
 
     temporaryBase = tempname(outputDir);
     stagedPng = [temporaryBase, '.png'];
@@ -47,6 +49,21 @@ function [pngFile, pdfFile] = export_lab_figure(target, outputBase, dpi)
         delete(pngFile);
         rethrow(exportError);
     end
+end
+
+function cleanup = reserveOutput(outputBase)
+    folder = [outputBase, '.figure-pack-lock'];
+    if usejava('jvm')
+        lockFile = java.io.File(folder);
+        reserved = lockFile.mkdir();
+    else
+        [created, ~, messageId] = mkdir(folder);
+        reserved = created && isempty(messageId);
+    end
+    if ~reserved
+        error('export_lab_figure:OutputBusy', 'Cannot reserve the output name: %s', outputBase);
+    end
+    cleanup = onCleanup(@() rmdir(folder));
 end
 
 function checkAvailable(pngFile, pdfFile)

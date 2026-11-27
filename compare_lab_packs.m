@@ -23,8 +23,8 @@ function [figures, series] = compare_lab_packs(baselineFolder, candidateFolder, 
     relTol = tolerance(options.Results.RelTol, 'RelTol');
 
     [outputFolder, outputParent] = freshDestination(outputFolder);
-    baseline = readPack(baselineFolder, "Baseline");
-    candidate = readPack(candidateFolder, "Candidate");
+    baseline = read_lab_pack(baselineFolder, "Baseline", mfilename);
+    candidate = read_lab_pack(candidateFolder, "Candidate", mfilename);
     source = union(baseline.Manifest.Source, candidate.Manifest.Source);
     [~, baselineRows] = ismember(source, baseline.Manifest.Source);
     [~, candidateRows] = ismember(source, candidate.Manifest.Source);
@@ -54,8 +54,8 @@ function [figures, series] = compare_lab_packs(baselineFolder, candidateFolder, 
     end
     series = vertcat(details{:});
 
-    writetable(figures, fullfile(stage, 'comparison.csv'), 'Encoding', 'UTF-8');
-    writetable(series, fullfile(stage, 'series.csv'), 'Encoding', 'UTF-8');
+    writetable(figures, fullfile(stage, 'comparison.csv'), 'Encoding', 'UTF-8', 'QuoteStrings', true);
+    writetable(series, fullfile(stage, 'series.csv'), 'Encoding', 'UTF-8', 'QuoteStrings', true);
     write_lab_pack_comparison(fullfile(stage, 'index.html'), figures, series, absTol, relTol);
     publish_lab_pack(stage, outputFolder, mfilename);
 end
@@ -77,7 +77,7 @@ function [folder, parent] = freshDestination(folder)
     if parent == ""
         parent = string(pwd);
     end
-    parent = existingFolder(parent, "Output parent");
+    parent = lab_pack_folder(parent, "Output parent", mfilename);
     folder = fullfile(parent, name + extension);
     assertFresh(folder);
 end
@@ -95,64 +95,6 @@ function value = pathText(value, label)
     if ~isstring(value) || ~isscalar(value) || ismissing(value) || strlength(value) == 0
         error('compare_lab_packs:InvalidPath', '%s must be a nonempty path.', label);
     end
-end
-
-function folder = existingFolder(folder, label)
-    if ~isfolder(folder)
-        error('compare_lab_packs:MissingFolder', '%s does not exist: %s', label, folder);
-    end
-    [found, attributes] = fileattrib(folder);
-    if ~found || ~isscalar(attributes)
-        error('compare_lab_packs:FolderPath', 'Cannot resolve %s: %s', label, folder);
-    end
-    folder = string(attributes.Name);
-end
-
-function pack = readPack(folder, label)
-    pack.Folder = existingFolder(pathText(folder, label), label);
-    pack.Label = label;
-    pack.Root = [];
-    if usejava('jvm')
-        pack.Root = realPath(pack.Folder);
-    end
-    [file, issue] = containedFile(pack, "manifest.csv", false);
-    if issue ~= ""
-        error('compare_lab_packs:InvalidManifest', '%s manifest.csv: %s', label, issue);
-    end
-
-    required = {'Source', 'Status', 'PNG', 'PDF', 'DataCSV', 'SeriesCount', 'BookPage', 'Message'};
-    textVars = {'Source', 'Status', 'PNG', 'PDF', 'DataCSV', 'Message'};
-    try
-        opts = detectImportOptions(file, 'FileType', 'text', 'Delimiter', ',', ...
-            'Encoding', 'UTF-8', 'VariableNamingRule', 'preserve');
-        if ~all(ismember(required, opts.VariableNames))
-            error('compare_lab_packs:ManifestColumns', 'Expected the Figure Pack manifest columns.');
-        end
-        opts = setvartype(opts, textVars, 'string');
-        opts = setvartype(opts, {'SeriesCount', 'BookPage'}, 'double');
-        opts = setvaropts(opts, textVars, 'WhitespaceRule', 'preserve');
-        opts.ImportErrorRule = 'error';
-        opts.ExtraColumnsRule = 'error';
-        manifest = readtable(file, opts);
-    catch problem
-        error('compare_lab_packs:InvalidManifest', ...
-            '%s manifest.csv could not be read: %s', label, problem.message);
-    end
-    for name = string(textVars)
-        value = manifest.(name);
-        value(ismissing(value)) = "";
-        manifest.(name) = value;
-    end
-    for index = 1:height(manifest)
-        if ~safeRelativePath(manifest.Source(index))
-            error('compare_lab_packs:InvalidSource', ...
-                '%s manifest.csv has an invalid relative Source at row %d.', label, index);
-        end
-    end
-    if numel(unique(manifest.Source)) ~= height(manifest)
-        error('compare_lab_packs:DuplicateSource', '%s manifest.csv repeats a Source path.', label);
-    end
-    pack.Manifest = manifest;
 end
 
 function [figure, rows] = compareFigure(figure, baseline, baseRow, candidate, candRow, ...
@@ -227,7 +169,7 @@ function [preview, csvPath, notes] = inspectRow(pack, index, stage, fileIndex)
         return
     end
 
-    [pngPath, issue] = artifactFile(pack, row.PNG, ".png");
+    [pngPath, issue] = lab_pack_artifact(pack, row.PNG, ".png");
     if issue == ""
         previewName = string(sprintf('previews/%04d-%s.png', fileIndex, lower(pack.Label)));
         issue = copyPreview(pngPath, fullfile(stage, previewName));
@@ -240,92 +182,9 @@ function [preview, csvPath, notes] = inspectRow(pack, index, stage, fileIndex)
     end
 
     if row.DataCSV ~= "" || row.SeriesCount > 0
-        [csvPath, issue] = artifactFile(pack, row.DataCSV, ".csv");
+        [csvPath, issue] = lab_pack_artifact(pack, row.DataCSV, ".csv");
         if issue ~= ""
             notes(end + 1) = pack.Label + " data CSV: " + issue;
-        end
-    end
-end
-
-function [path, issue] = artifactFile(pack, relative, extension)
-    path = "";
-    if relative == ""
-        issue = "No path was recorded in the manifest.";
-    elseif ~safeRelativePath(relative) || ~startsWith(relative, "plots/") || ...
-            ~endsWith(relative, extension, 'IgnoreCase', true)
-        issue = "The manifest path must be a relative " + extension + " file under plots/.";
-    else
-        [path, issue] = containedFile(pack, relative, true);
-    end
-end
-
-function valid = safeRelativePath(path)
-    components = split(path, "/");
-    code = double(char(path));
-    valid = ~contains(path, ["\", ":"]) && ~any(components == "" | ...
-        components == "." | components == "..") && ~any(code < 32 | code == 127);
-end
-
-function [file, issue] = containedFile(pack, relative, withinPlots)
-    file = "";
-    issue = "";
-    proposed = fullfile(pack.Folder, replace(relative, "/", filesep));
-    if ~isempty(pack.Root)
-        try
-            resolved = realPath(proposed);
-            boundary = pack.Root;
-            if withinPlots
-                boundary = boundary.resolve('plots');
-            end
-            if ~resolved.startsWith(boundary)
-                issue = "The file resolves outside the permitted pack directory.";
-                return
-            end
-            if ~javaMethod('isRegularFile', 'java.nio.file.Files', resolved, ...
-                    javaArray('java.nio.file.LinkOption', 0))
-                issue = "The path is not a regular file.";
-                return
-            end
-            proposed = string(resolved.toString());
-        catch
-            issue = "The file is missing or cannot be resolved.";
-            return
-        end
-    else
-        issue = verifyNoSymbolicLinks(pack.Folder, relative);
-        if issue ~= ""
-            return
-        end
-    end
-    if ~isfile(proposed)
-        issue = "The file does not exist.";
-        return
-    end
-    file = proposed;
-end
-
-function path = realPath(file)
-    handle = java.io.File(char(file));
-    nioPath = handle.toPath();
-    path = nioPath.toRealPath(javaArray('java.nio.file.LinkOption', 0));
-end
-
-function issue = verifyNoSymbolicLinks(root, relative)
-    issue = "";
-    if ispc || isempty(which('isSymbolicLink'))
-        issue = "MATLAB could not verify the path without its JVM.";
-        return
-    end
-    for part = split(relative, "/").'
-        root = fullfile(root, part);
-        try
-            if isSymbolicLink(root)
-                issue = "Symbolic links require MATLAB's JVM for containment verification.";
-                return
-            end
-        catch
-            issue = "Cannot verify the file path.";
-            return
         end
     end
 end

@@ -40,6 +40,7 @@ function testNestedExportsAndCorruptInput(testCase)
     verifyEqual(testCase, report.DataCSV(2:3), [""; ""]);
     verifyEqual(testCase, report.PNG(3), "");
     verifyNotEmpty(testCase, char(report.Message(3)));
+    verifyFalse(testCase, contains(report.Message(3), string(inputFolder)));
     verifyTrue(testCase, isgraphics(existing, 'figure'));
     verifyEqual(testCase, numel(findall(groot, 'Type', 'figure')), numel(openBefore));
     verifyTrue(testCase, all(isgraphics(openBefore, 'figure')));
@@ -90,6 +91,41 @@ function testEmptyInputProducesAnEmptyManifest(testCase)
     verifyFalse(testCase, isfile(fullfile(outputFolder, 'figures.pdf')));
 end
 
+function testQuotedMetadataAndExactDoubleRoundTrip(testCase)
+    [root, baseline, baselinePack] = folders(testCase);
+    candidate = fullfile(root, 'candidate');
+    candidatePack = fullfile(root, 'candidate-pack');
+    mkdir(candidate);
+    savePrecisionPlot(fullfile(baseline, 'precision.fig'), 1);
+    savePrecisionPlot(fullfile(candidate, 'precision.fig'), 1 + eps);
+    export_lab_batch(baseline, baselinePack, 'DPI', 100, 'CombinePDF', false);
+    exported = export_lab_batch(candidate, candidatePack, 'DPI', 100, 'CombinePDF', false);
+
+    [figures, series] = compare_lab_packs(baselinePack, candidatePack, fullfile(root, 'comparison'));
+    verifyEqual(testCase, figures.Status, "Outside tolerance");
+    verifyEqual(testCase, series.MaxAbsDelta, eps);
+    verifyEqual(testCase, series.OutsideSamples, 1);
+
+    [fig, ax, lines] = replot_lab_figure(fullfile(candidatePack, exported.DataCSV), 'Visible', 'off');
+    addTeardown(testCase, @delete, fig);
+    verifyEqual(testCase, lines.YData, [1 + eps, 2]);
+    titleLines = string(ax.Title.String);
+    verifyEqual(testCase, titleLines(:), ["First line"; "Second line"]);
+end
+
+function testSingleFigureHonorsAnExistingWriteReservation(testCase)
+    [root, ~, ~] = folders(testCase);
+    target = fullfile(root, 'reserved');
+    mkdir([target, '.figure-pack-lock']);
+    fig = figure('Visible', 'off');
+    addTeardown(testCase, @delete, fig);
+    plot(axes(fig), [0, 1], [0, 1]);
+
+    verifyError(testCase, @() export_lab_figure(fig, target), 'export_lab_figure:OutputBusy');
+    verifyFalse(testCase, isfile([target, '.png']));
+    verifyFalse(testCase, isfile([target, '.pdf']));
+end
+
 function [root, inputFolder, outputFolder] = folders(testCase)
     root = tempname;
     mkdir(root);
@@ -97,6 +133,15 @@ function [root, inputFolder, outputFolder] = folders(testCase)
     inputFolder = fullfile(root, 'source');
     outputFolder = fullfile(root, 'pack');
     mkdir(inputFolder);
+end
+
+function savePrecisionPlot(path, firstValue)
+    fig = figure('Visible', 'off');
+    guard = onCleanup(@() delete(fig));
+    ax = axes(fig);
+    plot(ax, [1, 2], [firstValue, 2], 'DisplayName', 'Precision trace');
+    title(ax, {'First line', 'Second line'});
+    savefig(fig, path);
 end
 
 function saveTraces(path)

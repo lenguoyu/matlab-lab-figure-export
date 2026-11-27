@@ -9,7 +9,8 @@ function testAbsoluteAndRelativeLimitsAndSharedGap(testCase)
         samples(1, "001", [0, 1, 2, 3], [0, 2, -4, NaN]), ...
         samples(1, "001", [0, 1, 2, 3], [0.125, 2.25, -3.25, NaN]));
 
-    result = compare_lab_series("run.fig", baseline, candidate, 0.125, 0.125);
+    [~, result] = compare_lab_packs(baseline, candidate, fullfile(root, 'report'), ...
+        'AbsTol', 0.125, 'RelTol', 0.125);
 
     verifyEqual(testCase, result.Label, "001");
     verifyEqual(testCase, result.Status, "Outside tolerance");
@@ -34,7 +35,7 @@ function testIncompatibleSeriesAreVisible(testCase)
         samples(6, "Empty", [0, 1], [NaN, NaN])];
     [baseline, candidate] = csvPair(root, baselineData, candidateData);
 
-    result = compare_lab_series("run.fig", baseline, candidate, 0, 0);
+    [~, result] = compare_lab_packs(baseline, candidate, fullfile(root, 'report'));
 
     verifyEqual(testCase, result.Series, (1:6).');
     verifyEqual(testCase, result.Status, ["Metadata changed"; "Grid changed"; ...
@@ -86,10 +87,12 @@ function root = newFolder(testCase)
 end
 
 function [baseline, candidate] = csvPair(root, baselineData, candidateData)
-    baseline = fullfile(root, 'baseline.csv');
-    candidate = fullfile(root, 'candidate.csv');
-    writeTable(baselineData, baseline);
-    writeTable(candidateData, candidate);
+    baseline = fullfile(root, 'baseline');
+    candidate = fullfile(root, 'candidate');
+    left = writePack(baseline, "run.fig", 0);
+    right = writePack(candidate, "run.fig", 0);
+    writeTable(baselineData, fullfile(baseline, left.DataCSV));
+    writeTable(candidateData, fullfile(candidate, right.DataCSV));
 end
 
 function data = samples(series, label, x, y)
