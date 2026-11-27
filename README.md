@@ -1,6 +1,6 @@
 # MATLAB Figure Pack
 
-Turn saved MATLAB figures into a shareable bundle with an offline gallery, PNG and vector PDF exports, and reusable XY data. Use the same bundle to compare experiment runs, preflight paper artwork, or rebuild editable plots for a report.
+Turn saved MATLAB figures into a shareable bundle with an offline gallery, PNG and vector PDF exports, and reusable XY data. Use the same bundle to compare runs, preflight paper artwork, rebuild editable plots, or connect to Plotly and Python.
 
 [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=lenguoyu/matlab-lab-figure-export&file=demo_lab_figure_pack.m) · [Download source](https://github.com/lenguoyu/matlab-lab-figure-export/archive/refs/heads/main.zip) · [Offline comparison example](https://github.com/lenguoyu/matlab-lab-figure-export/raw/refs/heads/main/comparison-example.zip) · [中文工作流](docs/WORKFLOWS.md)
 
@@ -20,9 +20,12 @@ Set the repository as your current MATLAB folder, or add its root to the path. G
 | Review two runs | `compare_lab_packs('baseline-pack', 'candidate-pack', 'comparison')` |
 | Check a 600 DPI target at 88.9 mm | `check_lab_artwork(pack, 88.9, 600)` |
 | Rebuild a saved curve as editable graphics | `replot_lab_figure(fullfile(pack, report.DataCSV(1)))` |
+| Export Plotly JSON or an offline interactive gallery | `export_lab_plotly(pack, 'plotly-json')` · [Integration guide](docs/INTEGRATIONS.md) |
 | Export one open figure | `export_lab_figure(gca, 'response')` |
 
 The [workflow guide](docs/WORKFLOWS.md) shows how to prepare a paper figure, assemble coursework files, set a log axis, and interpret comparison results. To try the comparison from MATLAB, run `demo_lab_pack_comparison('comparison-demo')`. To browse the offline example, unzip it and open `index.html`.
+
+Try the [interactive example ZIP](https://github.com/lenguoyu/matlab-lab-figure-export/raw/refs/heads/main/docs/plotly-example.zip) to zoom, inspect samples, and switch between charts in a browser.
 
 ## Requirements and tests
 
