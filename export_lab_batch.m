@@ -37,7 +37,7 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
     validateattributes(dpi, {'numeric'}, {'scalar', 'real', 'finite', ...
         'integer', 'positive'}, mfilename, 'DPI');
 
-    sourceFolder = existingFolder(pathText(sourceFolder, 'sourceFolder'), 'sourceFolder');
+    sourceFolder = lab_pack_folder(sourceFolder, "sourceFolder", mfilename);
     outputFolder = pathText(outputFolder, 'outputFolder');
     assertFreshOutput(outputFolder);
     if ispc
@@ -49,7 +49,7 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
     if strlength(outputParent) == 0
         outputParent = string(pwd);
     end
-    outputParent = existingFolder(outputParent, 'outputFolder parent');
+    outputParent = lab_pack_folder(outputParent, "outputFolder parent", mfilename);
     outputFolder = fullfile(outputParent, outputName + outputExtension);
     assertFreshOutput(outputFolder);
 
@@ -81,7 +81,8 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
         bookName = "";
     end
 
-    writetable(report, fullfile(stageFolder, 'manifest.csv'), 'Encoding', 'UTF-8');
+    writetable(report, fullfile(stageFolder, 'manifest.csv'), ...
+        'Encoding', 'UTF-8', 'QuoteStrings', true);
     write_lab_figure_gallery(fullfile(stageFolder, 'index.html'), report, bookName);
     publish_lab_pack(stageFolder, outputFolder, mfilename);
 end
@@ -93,17 +94,6 @@ function value = pathText(value, argumentName)
     if ~isstring(value) || ~isscalar(value) || ismissing(value) || strlength(value) == 0
         error('export_lab_batch:InvalidPath', '%s must be a nonempty path.', argumentName);
     end
-end
-
-function folder = existingFolder(folder, argumentName)
-    if ~isfolder(folder)
-        error('export_lab_batch:MissingFolder', '%s does not exist: %s', argumentName, folder);
-    end
-    [found, attributes] = fileattrib(folder);
-    if ~found || ~isscalar(attributes)
-        error('export_lab_batch:FolderPath', 'Cannot resolve %s: %s', argumentName, folder);
-    end
-    folder = string(attributes.Name);
 end
 
 function [report, stems] = figurePlan(sourceFolder)
@@ -147,9 +137,10 @@ function [row, nextBookPage] = exportOne(row, stem, sourceFolder, stageFolder, d
     pngPath = outputBase + ".png";
     pdfPath = outputBase + ".pdf";
     csvPath = outputBase + ".csv";
+    sourcePath = pathWithin(sourceFolder, row.Source);
     ownPaths = false;
     try
-        figureHandle = openfig(pathWithin(sourceFolder, row.Source), 'new', 'invisible');
+        figureHandle = openfig(sourcePath, 'new', 'invisible');
         closeFigure = onCleanup(@() deleteFigures(figureHandle));
         if ~isscalar(figureHandle) || ~isgraphics(figureHandle, 'figure')
             error('export_lab_batch:FigureCount', 'Each FIG file must contain one figure.');
@@ -166,7 +157,7 @@ function [row, nextBookPage] = exportOne(row, stem, sourceFolder, stageFolder, d
         export_lab_figure(figureHandle, outputBase, dpi);
         samples = extract_lab_figure_data(figureHandle);
         if ~isempty(samples)
-            writetable(samples, csvPath, 'Encoding', 'UTF-8');
+            writeSamples(samples, csvPath);
             row.DataCSV = stem + ".csv";
             row.SeriesCount = height(unique(samples(:, {'Axes', 'Series'})));
         end
@@ -179,7 +170,7 @@ function [row, nextBookPage] = exportOne(row, stem, sourceFolder, stageFolder, d
         row.PDF = "";
         row.DataCSV = "";
         row.SeriesCount = 0;
-        row.Message = string(issue.message);
+        row.Message = relativeError(issue.message, sourcePath, row.Source, stageFolder);
         return
     end
 
@@ -191,6 +182,26 @@ function [row, nextBookPage] = exportOne(row, stem, sourceFolder, stageFolder, d
         nextBookPage = nextBookPage + 1;
     end
     row.Status = "Exported";
+end
+
+function writeSamples(samples, path)
+    % Keep enough decimal digits to round-trip a MATLAB double.
+    samples.X = compose('%.17g', samples.X);
+    samples.Y = compose('%.17g', samples.Y);
+    writetable(samples, path, 'Encoding', 'UTF-8', 'QuoteStrings', true);
+end
+
+function message = relativeError(detail, sourcePath, relativeSource, stageFolder)
+    message = string(detail);
+    absolutePaths = [sourcePath, stageFolder];
+    descriptions = [relativeSource, "the output staging folder"];
+    for index = 1:numel(absolutePaths)
+        path = absolutePaths(index);
+        message = replace(message, path, descriptions(index));
+        if ispc
+            message = replace(message, replace(path, "\", "/"), descriptions(index));
+        end
+    end
 end
 
 function path = pathWithin(rootFolder, relativePath)
