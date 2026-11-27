@@ -4,9 +4,13 @@
 
 Export the same MATLAB plot as a high-resolution PNG and a vector PDF in one call. Requires MATLAB R2020a or later. No extra toolboxes are needed.
 
+![50 Hz sine wave exported from MATLAB as a 450 DPI PNG](demo.png)
+
 ## 快速试用 · Quick start
 
-把 [`export_lab_figure.m`](export_lab_figure.m) 下载到 MATLAB 当前文件夹，运行下面的示例。Download the file to your current MATLAB folder and run the example.
+把 [`export_lab_figure.m`](export_lab_figure.m) 下载到 MATLAB 当前文件夹，也可[在 MATLAB Online 打开仓库](https://matlab.mathworks.com/open/github/v1?repo=lenguoyu/matlab-lab-figure-export)。下面的示例已在 MATLAB R2024b 实测。
+
+Download the function to your current MATLAB folder or [open the repository in MATLAB Online](https://matlab.mathworks.com/open/github/v1?repo=lenguoyu/matlab-lab-figure-export). The example was tested in MATLAB R2024b.
 
 ```matlab
 t = linspace(0, 0.06, 601);
