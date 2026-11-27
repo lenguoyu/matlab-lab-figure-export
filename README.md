@@ -8,6 +8,14 @@ Package saved MATLAB `.fig` files and selected project files into one ZIP for pa
 
 ## Quick start · 快速上手
 
+**[Download the delivery example ZIP / 下载一键交付示例](https://github.com/lenguoyu/matlab-lab-figure-export/releases/download/delivery-example-v1/matlab-delivery-example.zip)**
+
+Extract the ZIP and open `index.html` in your browser. This synthetic RC step-response study includes individual PNG and PDF figures, a DPI check, an offline interactive gallery, the input data, runnable MATLAB code, and a one-page report.
+
+下载并解压 ZIP，用浏览器打开根目录的 `index.html`。这个合成 RC 阶跃响应示例包含逐图 PNG 和 PDF、DPI 预检、离线交互图集、输入数据、可运行的 MATLAB 代码和一页报告。
+
+### Build a ZIP in MATLAB · 在 MATLAB 中生成交付包
+
 Run this from the repository root in MATLAB to generate two sample figures, build a delivery ZIP with the demo source and delivery guide, and extract it. Open the last path printed in your browser.
 
 在 MATLAB 中切换到仓库根目录后运行下面的命令。它会生成两张示例图，把示例源码和交付指南一并打包，然后解压。用浏览器打开最后一行输出的 `index.html` 路径。
