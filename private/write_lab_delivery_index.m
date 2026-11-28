@@ -1,4 +1,4 @@
-function write_lab_delivery_index(rootFolder, summary, widthMm, targetDPI)
+function write_lab_delivery_index(rootFolder, summary)
 %WRITE_LAB_DELIVERY_INDEX Write the delivery archive's offline start page.
 
     [file, message] = fopen(fullfile(rootFolder, 'index.html'), 'w', 'n', 'UTF-8');
@@ -21,7 +21,7 @@ function write_lab_delivery_index(rootFolder, summary, widthMm, targetDPI)
     writeLink(file, "delivery-manifest.csv", "Delivery inventory CSV");
     fprintf(file, '</ul></nav>\n');
 
-    writeSummary(file, summary, widthMm, targetDPI);
+    writeSummary(file, summary);
     if ~isempty(summary.Attachments)
         fprintf(file, '<section aria-labelledby="attachments"><h2 id="attachments">Attachments</h2><ul>\n');
         for index = 1:numel(summary.Attachments)
@@ -73,15 +73,15 @@ function writeLink(file, path, label)
         lab_relative_url(path), lab_html_escape(label));
 end
 
-function writeSummary(file, summary, widthMm, targetDPI)
+function writeSummary(file, summary)
     figures = summary.Figures;
     artwork = summary.Artwork;
     exported = nnz(figures.Status == "Exported");
     fprintf(file, '<section aria-labelledby="figure-results"><h2 id="figure-results">Figure results</h2>\n');
     fprintf(file, '<p>Exported %d of %d figures. See the figure gallery for individual downloads and export messages.</p>\n', ...
         exported, height(figures));
-    fprintf(file, ['<p>PNG checks use a %g mm placement width and a %g DPI target. Meets target %d. ' ...
-        'Below target %d. Needs review %d.</p>\n'], widthMm, targetDPI, ...
+    fprintf(file, ['<p>PNG resolution checks at the planned placement widths. Meets target %d. ' ...
+        'Below target %d. Needs review %d.</p>\n'], ...
         nnz(artwork.Status == "Meets target"), nnz(artwork.Status == "Below target"), ...
         nnz(artwork.Status == "Needs review"));
     if ~isempty(summary.Plotly)
@@ -98,21 +98,24 @@ end
 function writeFigureResults(file, figures, artwork)
     fprintf(file, ['<div class="table-scroll" tabindex="0" role="region" aria-labelledby="figure-results">' ...
         '<table><thead><tr><th scope="col">Figure</th><th scope="col">Export</th>' ...
+        '<th scope="col">Planned width / target</th>' ...
         '<th scope="col">PNG resolution</th><th scope="col">Effective DPI</th></tr></thead><tbody>\n']);
     [present, location] = ismember(figures.Source, artwork.Source);
     for index = 1:height(figures)
         status = "Needs review";
+        placement = "Unavailable";
         dpi = "Unavailable";
         if present(index)
             row = location(index);
             status = artwork.Status(row);
+            placement = string(sprintf('%g mm / %g DPI', artwork.PlacedWidthMm(row), artwork.TargetDPI(row)));
             if isfinite(artwork.EffectiveDPI(row))
                 dpi = string(sprintf('%.2f', artwork.EffectiveDPI(row)));
             end
         end
-        fprintf(file, '<tr><th scope="row">%s</th><td>%s</td><td>%s</td><td>%s</td></tr>\n', ...
+        fprintf(file, '<tr><th scope="row">%s</th><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n', ...
             lab_html_escape(figures.Source(index)), lab_html_escape(figures.Status(index)), ...
-            lab_html_escape(status), lab_html_escape(dpi));
+            lab_html_escape(placement), lab_html_escape(status), lab_html_escape(dpi));
     end
     fprintf(file, '</tbody></table></div>\n');
 end
