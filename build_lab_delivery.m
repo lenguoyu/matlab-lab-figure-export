@@ -1,9 +1,11 @@
-function [archive, summary] = build_lab_delivery(figFolder, outputZip, widthMm, targetDPI, varargin)
+function [archive, summary] = build_lab_delivery(source, outputZip, widthMm, targetDPI, varargin)
 %BUILD_LAB_DELIVERY Export, check, and package a MATLAB project handoff.
-%   [ARCHIVE, SUMMARY] = BUILD_LAB_DELIVERY(FIGFOLDER, OUTPUTZIP, WIDTHMM,
+%   [ARCHIVE, SUMMARY] = BUILD_LAB_DELIVERY(SOURCE, OUTPUTZIP, WIDTHMM,
 %   TARGETDPI) creates a new ZIP with a figure gallery, PNG and PDF exports,
-%   available XY data, a PNG artwork check, and a delivery index. Load
-%   only trusted FIG files. Review the reports for figure-level failures.
+%   available XY data, a PNG artwork check, and a delivery index. SOURCE
+%   can be a folder of FIG files or a vector of open figures. For a folder,
+%   'FigureFiles' can select relative FIG paths in the supplied order.
+%   Load only trusted FIG files. Review reports for figure-level failures.
 %
 %   'Files' lists the relative paths of files to include as attachments.
 %   They are copied as-is, with their directory structure, from the
@@ -19,6 +21,7 @@ function [archive, summary] = build_lab_delivery(figFolder, outputZip, widthMm, 
     options = inputParser;
     options.FunctionName = mfilename;
     options.PartialMatching = false;
+    addParameter(options, 'FigureFiles', strings(0, 1));
     addParameter(options, 'AttachmentRoot', pwd);
     addParameter(options, 'Files', strings(0, 1));
     addParameter(options, 'PlotlyJS', "");
@@ -45,8 +48,11 @@ function [archive, summary] = build_lab_delivery(figFolder, outputZip, widthMm, 
     makeFolder(contents);
 
     figures = fullfile(contents, 'figures');
-    summary.Figures = export_lab_batch(figFolder, figures, ...
-        'DPI', settings.DPI, 'CombinePDF', settings.CombinePDF);
+    exportOptions = {'DPI', settings.DPI, 'CombinePDF', settings.CombinePDF};
+    if ~any(strcmp('FigureFiles', options.UsingDefaults))
+        exportOptions = [exportOptions, {'FigureFiles', settings.FigureFiles}];
+    end
+    summary.Figures = export_lab_batch(source, figures, exportOptions{:});
     summary.Artwork = check_lab_artwork(figures, widthMm, targetDPI);
     writetable(summary.Artwork, fullfile(contents, 'artwork-check.csv'), ...
         'Encoding', 'UTF-8', 'QuoteStrings', true);
@@ -74,17 +80,9 @@ function [archive, summary] = build_lab_delivery(figFolder, outputZip, widthMm, 
 end
 
 function [sources, destinations] = selectedFiles(value, attachmentRoot)
-    if (ischar(value) && isrow(value)) || iscellstr(value)
-        value = string(value);
-    end
-    if ~isstring(value) || (~isempty(value) && ~isvector(value)) || any(ismissing(value(:)))
-        error('build_lab_delivery:InvalidFiles', 'Files must be a list of relative paths.');
-    end
-    relative = value(:);
-    if ispc
-        relative = replace(relative, "\", "/");
-    end
-    validatePaths(relative, 'UnsafeAttachment', 'DuplicateAttachment');
+    relative = lab_file_selection(value, 'Files', 'build_lab_delivery');
+    lab_validate_portable_paths(relative, 'build_lab_delivery:UnsafeAttachment', ...
+        'build_lab_delivery:DuplicateAttachment');
     sources = strings(size(relative));
     destinations = repmat("attachments/", size(relative)) + relative;
     if isempty(relative)
@@ -100,28 +98,6 @@ function [sources, destinations] = selectedFiles(value, attachmentRoot)
         if issue ~= ""
             error('build_lab_delivery:AttachmentFile', 'Cannot attach %s. %s', relative(index), issue);
         end
-    end
-end
-
-function validatePaths(paths, unsafeId, duplicateId)
-    unsafeCharacters = '[<>"|?*]|[ .](?:/|$)';
-    reservedName = '(?:^|/)(?i:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|/|$)';
-    folders = strings(0, 1);
-    for index = 1:numel(paths)
-        path = paths(index);
-        if ~lab_pack_relative_path(path) || ...
-                ~isempty(regexp(path, [unsafeCharacters '|' reservedName], 'once'))
-            error(['build_lab_delivery:' unsafeId], 'The archive path is not portable: %s', path);
-        end
-        for position = find(char(path) == '/')
-            folders(end + 1, 1) = extractBefore(path, position); %#ok<AGROW>
-        end
-    end
-    % Include parent spellings so case-insensitive extraction preserves the layout.
-    entries = [paths; unique(folders)];
-    if numel(unique(lower(entries))) ~= numel(entries)
-        error(['build_lab_delivery:' duplicateId], ...
-            'Archive paths must be unique on case-insensitive systems.');
     end
 end
 
@@ -141,7 +117,8 @@ function inventory = makeInventory(root)
     files = files(~[files.isdir]);
     absolute = string(fullfile({files.folder}, {files.name})).';
     relative = replace(extractAfter(absolute, strlength(root) + 1), filesep, "/");
-    validatePaths(relative, 'UnsafeArchivePath', 'DuplicateArchivePath');
+    lab_validate_portable_paths(relative, 'build_lab_delivery:UnsafeArchivePath', ...
+        'build_lab_delivery:DuplicateArchivePath');
     role = repmat("Delivery index", size(relative));
     role(relative == "artwork-check.csv") = "Artwork check";
     role(startsWith(relative, "figures/")) = "Figure Pack";
