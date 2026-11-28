@@ -1,8 +1,8 @@
 # MATLAB Figure Pack · MATLAB 图稿交付工具
 
-Package saved MATLAB `.fig` files and selected project files into one ZIP for paper figures, coursework, or experiment reviews. The package includes an offline index, PNG and vector PDF exports, supported XY data, and a resolution check at your chosen placement width. Use the same tools to compare two runs, rebuild editable plots, or add an offline Plotly gallery.
+Package open MATLAB figures or saved `.fig` files with selected project files into one ZIP for paper figures, coursework, or experiment reviews. The package includes an offline index, PNG and vector PDF exports, supported XY data, and a resolution check at your chosen placement width. Use the same tools to compare two runs, rebuild editable plots, or add an offline Plotly gallery.
 
-把 MATLAB `.fig` 图窗和选定的代码、报告等项目文件打成一个 ZIP，用于论文图稿、作业交付或实验复核。交付包包含离线索引、PNG 和矢量 PDF、可导出的 XY 数据，以及按放置宽度计算的分辨率检查。也可以单独比较两轮实验、重建可编辑曲线，或加入离线 Plotly 图集。
+把已打开的 MATLAB 图窗或保存的 `.fig` 文件，连同选定的代码、报告等项目文件打成一个 ZIP，用于论文图稿、作业交付或实验复核。交付包包含离线索引、PNG 和矢量 PDF、可导出的 XY 数据，以及按放置宽度计算的分辨率检查。也可以单独比较两轮实验、重建可编辑曲线，或加入离线 Plotly 图集。
 
 [![Open in MATLAB Online · 在 MATLAB Online 打开](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=lenguoyu/matlab-lab-figure-export&file=demo_lab_figure_pack.m) · [Download source / 下载源码](https://github.com/lenguoyu/matlab-lab-figure-export/archive/refs/heads/main.zip) · [Delivery guide / 交付指南](docs/DELIVERY.md)
 
@@ -36,12 +36,15 @@ fprintf('Delivery ZIP %s\nOpen %s\n', archive, fullfile(deliveryFolder, 'index.h
 | Task / 用途 | MATLAB entry point / 命令 |
 | --- | --- |
 | Package figures, checks, code, and reports / 打包图稿、预检、代码与报告 | `build_lab_delivery` |
+| Package the open figure / 直接打包当前图窗 | `build_lab_delivery(gcf, 'delivery.zip', 88.9, 600)` |
 | Export a folder of saved figures / 批量导出已保存的图窗 | `export_lab_batch('experiment-figs', 'figure-pack')` |
 | Compare two experiment runs / 比较两轮实验 | `compare_lab_packs('baseline-pack', 'candidate-pack', 'comparison')` |
 | Check a 600 DPI target at 88.9 mm / 检查 88.9 mm 宽度下是否达到 600 DPI | `check_lab_artwork(pack, 88.9, 600)` |
 | Rebuild an editable curve / 重建可编辑曲线 | `replot_lab_figure(fullfile(pack, report.DataCSV(1)))` |
 | Export Plotly JSON or an offline gallery / 导出 Plotly JSON 或离线交互图集 | `export_lab_plotly(pack, 'plotly-json')` · [Integration guide / 接入指南](docs/INTEGRATIONS.md) |
 | Export one open figure / 导出当前图稿 | `export_lab_figure(gca, 'response')` |
+
+Pass several figure handles to keep their order in the delivery, or use `FigureFiles` to select specific saved figures. 可以按指定顺序打包多个已打开的图窗，也可以用 `FigureFiles` 从目录中选取指定图稿。 [Delivery guide / 交付指南](docs/DELIVERY.md#选择图稿)
 
 Open `index.html` after extracting either offline example. To generate the comparison in MATLAB, run `demo_lab_pack_comparison('comparison-demo')`.
 

@@ -1,11 +1,12 @@
-function report = export_lab_batch(sourceFolder, outputFolder, varargin)
-%EXPORT_LAB_BATCH Export a tree of saved MATLAB figures for review.
-%   REPORT = EXPORT_LAB_BATCH(SOURCEFOLDER, OUTPUTFOLDER) exports the .fig
-%   files under SOURCEFOLDER to a new OUTPUTFOLDER. Only open FIG files
-%   from sources you trust. MATLAB can execute code when opening a FIG.
+function report = export_lab_batch(source, outputFolder, varargin)
+%EXPORT_LAB_BATCH Export saved or currently open MATLAB figures for review.
+%   REPORT = EXPORT_LAB_BATCH(SOURCE, OUTPUTFOLDER) accepts a folder of .fig
+%   files or a vector of open figure handles. Open figures stay open and
+%   receive source IDs such as figure-0001 in the supplied order. Only
+%   load trusted FIG files. MATLAB can execute code when opening a FIG.
 %
 %   The destination parent must exist. Each successful figure gets a PNG
-%   and a vector PDF under plots/, preserving its relative source path.
+%   and a vector PDF under plots/, preserving relative paths for saved figures.
 %   Supported line samples are written to a companion CSV. The batch also
 %   writes manifest.csv and index.html. A broken figure is recorded in the
 %   report and does not stop other figures.
@@ -15,6 +16,8 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
 %     'DryRun'     Plan output paths without opening figures or writing
 %                  anything (default false).
 %     'CombinePDF' Include successful figures in figures.pdf (default true).
+%     'FigureFiles' Export a nonempty list of relative .fig paths under a
+%                  source folder. Omit this option to scan the folder.
 %
 %   The report contains Source, Status, PNG, PDF, DataCSV, SeriesCount,
 %   BookPage, and Message. Paths are relative to their source or output
@@ -23,6 +26,7 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
 %   Example:
 %     plan = export_lab_batch('saved_figures', 'figure_pack', 'DryRun', true);
 %     report = export_lab_batch('saved_figures', 'figure_pack', 'DPI', 300);
+%     report = export_lab_batch([figA, figB], 'live_figures');
 %
 %   The combined PDF uses the Append option introduced in MATLAB R2021b.
 
@@ -32,15 +36,28 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
     addParameter(options, 'DPI', 450);
     addParameter(options, 'DryRun', false, @(value) islogical(value) && isscalar(value));
     addParameter(options, 'CombinePDF', true, @(value) islogical(value) && isscalar(value));
+    addParameter(options, 'FigureFiles', strings(0, 1));
     parse(options, varargin{:});
     dpi = options.Results.DPI;
     validateattributes(dpi, {'numeric'}, {'scalar', 'real', 'finite', ...
         'integer', 'positive'}, mfilename, 'DPI');
 
-    sourceFolder = lab_pack_folder(sourceFolder, "sourceFolder", mfilename);
+    selection = lab_file_selection(options.Results.FigureFiles, 'FigureFiles', mfilename);
+    if isempty(selection) && ~any(strcmp('FigureFiles', options.UsingDefaults))
+        error('export_lab_batch:EmptyFigureFiles', ...
+            'Supply at least one .fig path or omit FigureFiles to scan the source folder.');
+    end
+    sourceFolder = "";
+    handles = [];
+    if ischar(source) || isstring(source)
+        sourceFolder = lab_pack_folder(source, "sourceFolder", mfilename);
+    else
+        handles = validateFigures(source, selection);
+    end
     [outputFolder, outputParent] = lab_pack_destination(outputFolder, mfilename);
 
-    [report, stems] = figurePlan(sourceFolder);
+    [sources, inputFiles] = figureSources(sourceFolder, selection, handles);
+    [report, stems] = figurePlan(sources);
     if options.Results.DryRun
         return
     end
@@ -56,8 +73,12 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
     end
     nextBookPage = 1;
     for rowIndex = find(report.Status == "Planned").'
+        figureHandle = [];
+        if ~isempty(handles)
+            figureHandle = handles(rowIndex);
+        end
         [report(rowIndex, :), nextBookPage] = exportOne(report(rowIndex, :), ...
-            stems(rowIndex), sourceFolder, stageFolder, dpi, bookPath, nextBookPage);
+            stems(rowIndex), inputFiles(rowIndex), figureHandle, stageFolder, dpi, bookPath, nextBookPage);
     end
     if nextBookPage == 1
         bookName = "";
@@ -69,7 +90,53 @@ function report = export_lab_batch(sourceFolder, outputFolder, varargin)
     publish_lab_pack(stageFolder, outputFolder, mfilename);
 end
 
-function [report, stems] = figurePlan(sourceFolder)
+function figures = validateFigures(source, selection)
+    if ~isobject(source) || isempty(source) || ~isvector(source) || ~all(isgraphics(source(:), 'figure'))
+        error('export_lab_batch:InvalidFigures', 'Source must be a folder or a nonempty vector of open figure handles.');
+    end
+    if ~isempty(selection)
+        error('export_lab_batch:FigureFilesWithHandles', 'FigureFiles requires a source folder.');
+    end
+    figures = source(:);
+    for index = 2:numel(figures)
+        if any(figures(1:index-1) == figures(index))
+            error('export_lab_batch:DuplicateFigures', 'Supply each figure handle once.');
+        end
+    end
+end
+
+function [sources, files] = figureSources(folder, selection, handles)
+    if ~isempty(handles)
+        sources = compose("figure-%04d", (1:numel(handles)).');
+        files = strings(size(sources));
+        return;
+    end
+    if isempty(selection)
+        sources = scanFigures(folder);
+        files = pathWithin(folder, sources);
+        return;
+    end
+
+    lab_validate_portable_paths(selection, 'export_lab_batch:UnsafeFigureFile', ...
+        'export_lab_batch:DuplicateFigureFile');
+    if ~all(endsWith(selection, ".fig", 'IgnoreCase', true))
+        error('export_lab_batch:InvalidFigureFiles', 'FigureFiles must contain .fig paths.');
+    end
+    sources = selection;
+    files = strings(size(sources));
+    root = [];
+    if usejava('jvm')
+        root = lab_pack_real_path(folder);
+    end
+    for index = 1:numel(sources)
+        [files(index), issue] = lab_pack_contained_file(folder, root, sources(index));
+        if issue ~= ""
+            error('export_lab_batch:FigureFile', 'Cannot select %s. %s', sources(index), issue);
+        end
+    end
+end
+
+function sources = scanFigures(sourceFolder)
     listing = dir(fullfile(sourceFolder, '**', '*'));
     listing = listing(~[listing.isdir] & endsWith({listing.name}, '.fig', 'IgnoreCase', true));
     sources = strings(0, 1);
@@ -81,6 +148,9 @@ function [report, stems] = figurePlan(sourceFolder)
         absolute = string(fullfile({listing.folder}, {listing.name})).';
         sources = sort(replace(extractAfter(absolute, strlength(prefix)), filesep, '/'));
     end
+end
+
+function [report, stems] = figurePlan(sources)
     sourceStems = regexprep(sources, '\.fig$', '', 'ignorecase');
     % Preserve a usable filename for an input whose entire basename is ".fig".
     extensionOnly = sourceStems == "" | endsWith(sourceStems, '/');
@@ -105,18 +175,19 @@ function [report, stems] = figurePlan(sourceFolder)
     end
 end
 
-function [row, nextBookPage] = exportOne(row, stem, sourceFolder, stageFolder, dpi, bookPath, nextBookPage)
+function [row, nextBookPage] = exportOne(row, stem, sourcePath, figureHandle, stageFolder, dpi, bookPath, nextBookPage)
     outputBase = pathWithin(stageFolder, stem);
     pngPath = outputBase + ".png";
     pdfPath = outputBase + ".pdf";
     csvPath = outputBase + ".csv";
-    sourcePath = pathWithin(sourceFolder, row.Source);
     ownPaths = false;
     try
-        figureHandle = openfig(sourcePath, 'new', 'invisible');
-        closeFigure = onCleanup(@() deleteFigures(figureHandle));
-        if ~isscalar(figureHandle) || ~isgraphics(figureHandle, 'figure')
-            error('export_lab_batch:FigureCount', 'Each FIG file must contain one figure.');
+        if sourcePath ~= ""
+            figureHandle = openfig(sourcePath, 'new', 'invisible');
+            closeFigure = onCleanup(@() deleteFigures(figureHandle));
+            if ~isscalar(figureHandle) || ~isgraphics(figureHandle, 'figure')
+                error('export_lab_batch:FigureCount', 'Each FIG file must contain one figure.');
+            end
         end
 
         [created, message] = mkdir(fileparts(outputBase));
@@ -168,7 +239,7 @@ function message = relativeError(detail, sourcePath, relativeSource, stageFolder
     message = string(detail);
     absolutePaths = [sourcePath, stageFolder];
     descriptions = [relativeSource, "the output staging folder"];
-    for index = 1:numel(absolutePaths)
+    for index = find(absolutePaths ~= "")
         path = absolutePaths(index);
         message = replace(message, path, descriptions(index));
         if ispc

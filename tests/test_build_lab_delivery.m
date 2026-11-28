@@ -10,6 +10,9 @@ function testCompleteDeliveryPreservesFilesAndLocalLinks(testCase)
     figurePath = fullfile(source, relativeFigure);
     saveTrace(figurePath);
     originalFigure = readBytes(figurePath);
+    decoy = fullfile(source, 'broken.fig');
+    writeText(decoy, 'Unselected malformed figure.');
+    originalDecoy = readBytes(decoy);
 
     project = fullfile(root, 'project');
     mkdir(fullfile(project, '实验'));
@@ -23,7 +26,7 @@ function testCompleteDeliveryPreservesFilesAndLocalLinks(testCase)
     writeText(bundle, 'window.Plotly = {newPlot: function () {}};');
     writeText(license, 'Renderer license fixture.');
 
-    [archive, summary] = build_lab_delivery(source, output, 180, 2400, ...
+    [archive, summary] = build_lab_delivery(source, output, 180, 2400, 'FigureFiles', relativeFigure, ...
         'AttachmentRoot', project, 'Files', {char(scriptFile), char(documentFile)}, ...
         'PlotlyJS', bundle, 'PlotlyLicense', license, 'DPI', 100, 'CombinePDF', true);
 
@@ -81,7 +84,33 @@ function testCompleteDeliveryPreservesFilesAndLocalLinks(testCase)
             readBytes(fullfile(project, original)));
     end
     verifyEqual(testCase, readBytes(figurePath), originalFigure);
+    verifyEqual(testCase, readBytes(decoy), originalDecoy);
     verifyFalse(testCase, isfile(fullfile(source, '01 signals', '波形.png')));
+end
+
+function testLiveFigureDeliveryNeedsNoSavedFigure(testCase)
+    [root, ~, output] = newDelivery(testCase);
+    original = get(groot, 'CurrentFigure');
+    addTeardown(testCase, @() set(groot, 'CurrentFigure', original));
+    fig = figure('Visible', 'off');
+    addTeardown(testCase, @delete, fig);
+    plot(axes(fig), [0, 1], [2, 5]);
+
+    [archive, summary] = build_lab_delivery(fig, output, 25.4, 1, 'DPI', 100);
+
+    verifyEqual(testCase, summary.Figures.Source, "figure-0001");
+    assertEqual(testCase, summary.Figures.Status, "Exported");
+    verifyEqual(testCase, summary.Artwork.Source, "figure-0001");
+    verifyEqual(testCase, summary.Artwork.Status, "Meets target");
+    verifyTrue(testCase, isgraphics(fig, 'figure'));
+    verifyEqual(testCase, get(groot, 'CurrentFigure'), fig);
+    unpacked = fullfile(root, 'unpacked');
+    members = extractMembers(archive, unpacked);
+    expected = ["artwork-check.csv"; "figures/figures.pdf"; ...
+        "figures/plots/figure-0001.png"; "figures/plots/figure-0001.pdf"; ...
+        "figures/plots/figure-0001.csv"];
+    verifyTrue(testCase, all(ismember(expected, members)));
+    verifyEmpty(testCase, dir(fullfile(root, '**', '*.fig')));
 end
 
 function testDeliveryWithoutOptionalContents(testCase)
@@ -133,6 +162,7 @@ function testInvalidOptionsAndAttachmentsLeaveNoArchive(testCase)
     mkdir(fullfile(project, 'subfolder'));
     writeText(fullfile(project, 'Script.m'), '% Selected attachment fixture.');
     writeText(fullfile(root, 'outside.m'), '% Outside attachment root.');
+    writeText(fullfile(source, 'unselected.fig'), 'Malformed figure outside the selection.');
     buildWithFiles = @(files) build_lab_delivery(source, output, 90, 300, ...
         'AttachmentRoot', project, 'Files', files);
 
@@ -148,6 +178,8 @@ function testInvalidOptionsAndAttachmentsLeaveNoArchive(testCase)
     verifyError(testCase, @() buildWithFiles('subfolder'), 'build_lab_delivery:AttachmentFile');
     verifyError(testCase, @() build_lab_delivery(source, output, 90, 300, 'PlotlyJS', 'stub.js'), ...
         'build_lab_delivery:BundlePair');
+    verifyError(testCase, @() build_lab_delivery(source, output, 90, 300, 'FigureFiles', strings(0, 1)), ...
+        'export_lab_batch:EmptyFigureFiles');
     verifyFalse(testCase, isfile(output));
     verifyFalse(testCase, isfile(fullfile(root, 'output.pdf')));
     entries = dir(root);

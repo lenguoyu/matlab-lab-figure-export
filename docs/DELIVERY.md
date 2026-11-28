@@ -16,6 +16,21 @@
 
 默认以 450 DPI 导出 PNG，并附合并的 PDF 图册。用 `'DPI', 600` 调整导出设置，或用 `'CombinePDF', false` 仅保留逐图 PDF。预检按 PNG 实际像素宽度和指定的放置宽度计算有效 DPI。导出失败和分辨率不足会写入报告，交付前可在 `index.html` 查看。
 
+### 选择图稿
+
+如果图已经在 MATLAB 中打开，可以直接传入有效的图窗句柄。顺序决定图集中的编号和合并 PDF 的页序，交付后图窗仍保持打开。`figure-0001` 等编号按传入顺序生成。要用 `compare_lab_packs` 对比两轮结果，按相同顺序传入对应的图窗。
+
+```matlab
+archive = build_lab_delivery([figA, figB], 'open-figures.zip', 88.9, 600);
+```
+
+也可以从一批保存的图中挑选本次需要的文件。`FigureFiles` 至少要列出一条相对于图稿目录的 `.fig` 路径，按列出的顺序导出。省略此选项会扫描图稿目录及其子目录。`Files` 用于指定代码、报告和其他附件。只需要导出图稿时，`export_lab_batch` 也接受图窗句柄和 `FigureFiles`。
+
+```matlab
+archive = build_lab_delivery('experiment-figs', 'paper-figures.zip', 88.9, 600, ...
+    'FigureFiles', ["results/step.fig", "results/residual.fig"]);
+```
+
 ## 加入离线交互图
 
 需要浏览器缩放和查点时，保存官方 Plotly.js Basic 文件和同版本 MIT 许可证。运行命令时提供两者的本地路径。二维数值折线支持交互查看，其他成功导出的图可显示 PNG 预览。 [Plotly Basic v4.2.0](https://cdn.plot.ly/plotly-basic-4.2.0.min.js) · [同版本 MIT 许可](https://raw.githubusercontent.com/plotly/plotly.js/v4.2.0/LICENSE) · [数据范围说明](INTEGRATIONS.md)
