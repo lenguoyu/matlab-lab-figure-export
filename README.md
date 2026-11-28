@@ -39,7 +39,7 @@ fprintf('Delivery ZIP %s\nOpen %s\n', archive, fullfile(deliveryFolder, 'index.h
 | Package the open figure / 直接打包当前图窗 | `build_lab_delivery(gcf, 'delivery.zip', 88.9, 600)` |
 | Export a folder of saved figures / 批量导出已保存的图窗 | `export_lab_batch('experiment-figs', 'figure-pack')` |
 | Compare two experiment runs / 比较两轮实验 | `compare_lab_packs('baseline-pack', 'candidate-pack', 'comparison')` |
-| Check a 600 DPI target at 88.9 mm / 检查 88.9 mm 宽度下是否达到 600 DPI | `check_lab_artwork(pack, 88.9, 600)` |
+| Check PNG resolution at each planned width / 按实际排版宽度逐图预检 PNG | `check_lab_artwork(pack, 88.9, 600)` · [Per-figure settings / 逐图设置](docs/WORKFLOWS.md#逐图设置宽度与目标-dpi) |
 | Rebuild an editable curve / 重建可编辑曲线 | `replot_lab_figure(fullfile(pack, report.DataCSV(1)))` |
 | Export Plotly JSON or an offline gallery / 导出 Plotly JSON 或离线交互图集 | `export_lab_plotly(pack, 'plotly-json')` · [Integration guide / 接入指南](docs/INTEGRATIONS.md) |
 | Export one open figure / 导出当前图稿 | `export_lab_figure(gca, 'response')` |

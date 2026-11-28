@@ -12,7 +12,9 @@ function [archive, summary] = build_lab_delivery(source, outputZip, widthMm, tar
 %   'AttachmentRoot' directory (default current MATLAB folder).
 %   'PlotlyJS' and 'PlotlyLicense' add an offline interactive gallery when
 %   supplied together. 'DPI' and 'CombinePDF' are passed to EXPORT_LAB_BATCH
-%   and default to 450 and true. Open index.html after extracting the ZIP.
+%   and default to 450 and true. 'ArtworkOverrides' passes a per-figure
+%   width and DPI table to CHECK_LAB_ARTWORK. Open index.html after
+%   extracting the ZIP.
 %
 %   SUMMARY contains Figures, Artwork, Plotly, Attachments, and Inventory.
 %   Figure and Plotly output paths are relative to their respective
@@ -22,6 +24,7 @@ function [archive, summary] = build_lab_delivery(source, outputZip, widthMm, tar
     options.FunctionName = mfilename;
     options.PartialMatching = false;
     addParameter(options, 'FigureFiles', strings(0, 1));
+    addParameter(options, 'ArtworkOverrides', table());
     addParameter(options, 'AttachmentRoot', pwd);
     addParameter(options, 'Files', strings(0, 1));
     addParameter(options, 'PlotlyJS', "");
@@ -53,7 +56,8 @@ function [archive, summary] = build_lab_delivery(source, outputZip, widthMm, tar
         exportOptions = [exportOptions, {'FigureFiles', settings.FigureFiles}];
     end
     summary.Figures = export_lab_batch(source, figures, exportOptions{:});
-    summary.Artwork = check_lab_artwork(figures, widthMm, targetDPI);
+    summary.Artwork = check_lab_artwork(figures, widthMm, targetDPI, ...
+        'ArtworkOverrides', settings.ArtworkOverrides);
     writetable(summary.Artwork, fullfile(contents, 'artwork-check.csv'), ...
         'Encoding', 'UTF-8', 'QuoteStrings', true);
     summary.Plotly = table();
@@ -64,7 +68,7 @@ function [archive, summary] = build_lab_delivery(source, outputZip, widthMm, tar
     % An attachment can itself be a FIG. Copy it after the source scan.
     copyAttachments(sources, attachments, contents);
     summary.Attachments = attachments;
-    write_lab_delivery_index(contents, summary, widthMm, targetDPI);
+    write_lab_delivery_index(contents, summary);
     summary.Inventory = makeInventory(contents);
     manifest = "delivery-manifest.csv";
     writetable(summary.Inventory, fullfile(contents, manifest), ...
