@@ -67,6 +67,103 @@ function testNestedExportsAndCorruptInput(testCase)
     verifyTrue(testCase, isfile(fullfile(outputFolder, report.PNG(1))));
 end
 
+function testLiveFigureBatchPreservesCallerOrderAndState(testCase)
+    [root, ~, outputFolder] = folders(testCase);
+    original = get(groot, 'CurrentFigure');
+    addTeardown(testCase, @() set(groot, 'CurrentFigure', original));
+
+    first = figure('Visible', 'off');
+    addTeardown(testCase, @delete, first);
+    plot(axes(first), [0, 1], [1, 2]);
+    second = figure('Visible', 'off');
+    addTeardown(testCase, @delete, second);
+    plot(axes(second), [0, 1], [3, 4]);
+    current = figure('Visible', 'off');
+    addTeardown(testCase, @delete, current);
+    openBefore = findall(groot, 'Type', 'figure');
+    sources = [second; first];
+
+    plan = export_lab_batch(sources, outputFolder, 'DryRun', true);
+    verifyEqual(testCase, plan.Source, ["figure-0001"; "figure-0002"]);
+    verifyEqual(testCase, plan.Status, ["Planned"; "Planned"]);
+    verifyFalse(testCase, isfolder(outputFolder));
+    verifyEqual(testCase, get(groot, 'CurrentFigure'), current);
+
+    report = export_lab_batch(sources, outputFolder, 'DPI', 100);
+
+    verifyEqual(testCase, report.Source, plan.Source);
+    assertEqual(testCase, report.Status, ["Exported"; "Exported"]);
+    verifyEqual(testCase, report.BookPage, [1; 2]);
+    verifyTrue(testCase, isfile(fullfile(outputFolder, 'figures.pdf')));
+    firstData = readtable(fullfile(outputFolder, report.DataCSV(1)));
+    secondData = readtable(fullfile(outputFolder, report.DataCSV(2)));
+    verifyEqual(testCase, firstData.Y, [3; 4]);
+    verifyEqual(testCase, secondData.Y, [1; 2]);
+    verifyTrue(testCase, all(isgraphics(openBefore, 'figure')));
+    verifyEqual(testCase, numel(findall(groot, 'Type', 'figure')), numel(openBefore));
+    verifyEqual(testCase, get(groot, 'CurrentFigure'), current);
+    verifyEqual(testCase, [string(first.Visible), string(second.Visible)], ["off", "off"]);
+    verifyEmpty(testCase, dir(fullfile(root, '**', '*.fig')));
+end
+
+function testSelectedFilesExportInCallerOrder(testCase)
+    [root, inputFolder, outputFolder] = folders(testCase);
+    mkdir(fullfile(inputFolder, 'nested'));
+    saveTraces(fullfile(inputFolder, 'nested', 'a.fig'));
+    saveScatter(fullfile(root, 'scatter.fig'));
+    [copied, message] = copyfile(fullfile(root, 'scatter.fig'), fullfile(inputFolder, 'z.FIG'));
+    assertTrue(testCase, logical(copied), message);
+    decoy = fullfile(inputFolder, 'broken.fig');
+    writeBrokenFigure(decoy);
+    originalDecoy = fileread(decoy);
+
+    selection = {'z.FIG', 'nested/a.fig'};
+    report = export_lab_batch(inputFolder, outputFolder, 'FigureFiles', selection, 'DPI', 100);
+
+    verifyEqual(testCase, report.Source, ["z.FIG"; "nested/a.fig"]);
+    verifyEqual(testCase, report.Status, ["Exported"; "Exported"]);
+    verifyEqual(testCase, report.BookPage, [1; 2]);
+    verifyEqual(testCase, report.PNG, ["plots/z.png"; "plots/nested/a.png"]);
+    verifyEqual(testCase, report.SeriesCount, [0; 2]);
+    verifyEqual(testCase, fileread(decoy), originalDecoy);
+end
+
+function testInvalidFigureInputsDoNotCreateOutputs(testCase)
+    [root, inputFolder, outputFolder] = folders(testCase);
+    original = get(groot, 'CurrentFigure');
+    addTeardown(testCase, @() set(groot, 'CurrentFigure', original));
+    fig = figure('Visible', 'off');
+    addTeardown(testCase, @delete, fig);
+    ax = axes(fig);
+    deleted = figure('Visible', 'off');
+    delete(deleted);
+    mkdir(fullfile(inputFolder, 'directory.fig'));
+
+    exportInput = @(input) export_lab_batch(input, outputFolder);
+    verifyError(testCase, @() exportInput(deleted), 'export_lab_batch:InvalidFigures');
+    verifyError(testCase, @() exportInput(gobjects(0, 1)), 'export_lab_batch:InvalidFigures');
+    verifyError(testCase, @() exportInput(ax), 'export_lab_batch:InvalidFigures');
+    verifyError(testCase, @() exportInput([fig, fig; fig, fig]), 'export_lab_batch:InvalidFigures');
+    verifyError(testCase, @() exportInput([fig, fig]), 'export_lab_batch:DuplicateFigures');
+    verifyError(testCase, @() export_lab_batch(fig, outputFolder, 'FigureFiles', 'picked.fig'), ...
+        'export_lab_batch:FigureFilesWithHandles');
+
+    exportFiles = @(files) export_lab_batch(inputFolder, outputFolder, 'FigureFiles', files);
+    verifyError(testCase, @() exportFiles(5), 'export_lab_batch:InvalidFigureFiles');
+    verifyError(testCase, @() exportFiles(strings(0, 1)), 'export_lab_batch:EmptyFigureFiles');
+    verifyError(testCase, @() exportFiles('notes.txt'), 'export_lab_batch:InvalidFigureFiles');
+    verifyError(testCase, @() exportFiles('../outside.fig'), 'export_lab_batch:UnsafeFigureFile');
+    verifyError(testCase, @() exportFiles(fullfile(inputFolder, 'absolute.fig')), ...
+        'export_lab_batch:UnsafeFigureFile');
+    verifyError(testCase, @() exportFiles(["same.fig", "SAME.FIG"]), ...
+        'export_lab_batch:DuplicateFigureFile');
+    verifyError(testCase, @() exportFiles('missing.fig'), 'export_lab_batch:FigureFile');
+    verifyError(testCase, @() exportFiles('directory.fig'), 'export_lab_batch:FigureFile');
+    contents = dir(root);
+    names = string({contents.name});
+    verifyEqual(testCase, names(~ismember(names, [".", ".."])), "source");
+end
+
 function testCombinedPdfCanBeDisabled(testCase)
     [~, inputFolder, outputFolder] = folders(testCase);
     saveScatter(fullfile(inputFolder, 'scatter.fig'));
